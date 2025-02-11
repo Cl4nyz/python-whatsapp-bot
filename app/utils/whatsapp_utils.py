@@ -2,8 +2,12 @@ import logging
 from flask import current_app, jsonify
 import json
 import requests
+from pydub import AudioSegment
+import io
 
-# from app.services.openai_service import generate_response
+from app.services.openai_service import generate_response, transcribe_audio
+from app.utils.user_data import get_salesman
+from app.constants import *
 import re
 
 
@@ -23,11 +27,6 @@ def get_text_message_input(recipient, text):
             "text": {"preview_url": False, "body": text},
         }
     )
-
-
-def generate_response(response):
-    # Return text in uppercase
-    return response.upper()
 
 
 def send_message(data):
@@ -75,21 +74,49 @@ def process_text_for_whatsapp(text):
     return whatsapp_style_text
 
 
+def replace_phone(wa_id, text):
+    if '<<contato' in text:
+        if (pattern := '<<contato_vendas>>') in text:
+            # Checks if current client already has salesman attached
+            substitute = get_salesman(wa_id)
+        elif (pattern := '<<contato_assistencia>>') in text:
+            substitute = TECNICO
+        elif (pattern := '<<contato_financeiro>>') in text:
+            substitute = FINANCEIRO
+        text = re.sub(pattern, substitute, text)
+    return text
+
+
 def process_whatsapp_message(body):
     wa_id = body["entry"][0]["changes"][0]["value"]["contacts"][0]["wa_id"]
     name = body["entry"][0]["changes"][0]["value"]["contacts"][0]["profile"]["name"]
 
     message = body["entry"][0]["changes"][0]["value"]["messages"][0]
-    message_body = message["text"]["body"]
+    match message['type']:
 
-    # TODO: implement custom function here
-    response = generate_response(message_body)
+        case 'text':
+            message_body = message["text"]["body"]
+            print(f'{LIGHTBLUE}{wa_id} - {message_body}{RESET}')
+            response = open_ai_response(wa_id, name, message_body)
 
-    # OpenAI Integration
-    # response = generate_response(message_body, wa_id, name)
-    # response = process_text_for_whatsapp(response)
+        case 'audio':
+            print(f'{LIGHTBLUE}{wa_id}{YELLOW} - Mensagem de áudio{RESET}')
+            audio_id = message['audio']['id']
+            message_body = process_audio_message(audio_id)
 
-    data = get_text_message_input(current_app.config["RECIPIENT_WAID"], response)
+            if message_body == FALSE:
+                response = 'Não consegui entender seu áudio! Tente novamente por gentileza.'
+
+            else:
+                print(f'{LIGHTBLUE}{wa_id} - {message_body}{RESET}')
+                response = open_ai_response(wa_id, name, message_body)
+
+        case _:
+            print(f'{LIGHTBLUE}{wa_id} - {RED}Formato inválido de mensagem{RESET}')
+            response = "Atualmente só entendo mensagens de texto e áudio! Poderia tentar novamente?"
+
+    data = get_text_message_input(wa_id, response)
+    print(f'{GREEN}Homero → {LIGHTBLUE}{wa_id}{GREEN} - {response}{RESET}')
     send_message(data)
 
 
@@ -105,3 +132,44 @@ def is_valid_whatsapp_message(body):
         and body["entry"][0]["changes"][0]["value"].get("messages")
         and body["entry"][0]["changes"][0]["value"]["messages"][0]
     )
+
+
+def open_ai_response(wa_id, name, message_body):
+    response = generate_response(message_body, wa_id, name)
+    response = replace_phone(wa_id, response)
+    response = process_text_for_whatsapp(response)
+    return response
+
+def download_audio(media_id):
+    '''
+    Retorna binário
+    '''
+    url = f"https://graph.facebook.com/v22.0/{media_id}"
+    headers = {"Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        media_url = response.json().get("url")
+        return requests.get(media_url, headers=headers).content  # Retorna o arquivo binário
+    else:
+        raise Exception("Erro ao baixar o áudio do WhatsApp")
+
+
+def convert_audio_to_mp3(audio_bytes):
+    audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format="ogg")
+    mp3_buffer = io.BytesIO()
+    audio.export(mp3_buffer, format="mp3")
+    return mp3_buffer.getvalue()
+
+
+def process_audio_message(audio_id):
+    try:
+        audio_bytes = download_audio(audio_id)
+        mp3_audio = convert_audio_to_mp3(audio_bytes)
+        transcribed_text = transcribe_audio(mp3_audio)
+
+        return transcribed_text
+
+    except Exception as e:
+        return FALSE
+
+

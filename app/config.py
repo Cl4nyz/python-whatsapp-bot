@@ -1,19 +1,19 @@
 import sys
 import os
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv, get_key
 import logging
 
 
 def load_configurations(app):
-    load_dotenv()
-    app.config["ACCESS_TOKEN"] = os.getenv("ACCESS_TOKEN")
-    app.config["YOUR_PHONE_NUMBER"] = os.getenv("YOUR_PHONE_NUMBER")
-    app.config["APP_ID"] = os.getenv("APP_ID")
-    app.config["APP_SECRET"] = os.getenv("APP_SECRET")
-    app.config["RECIPIENT_WAID"] = os.getenv("RECIPIENT_WAID")
-    app.config["VERSION"] = os.getenv("VERSION")
-    app.config["PHONE_NUMBER_ID"] = os.getenv("PHONE_NUMBER_ID")
-    app.config["VERIFY_TOKEN"] = os.getenv("VERIFY_TOKEN")
+    # path = find_dotenv()            # necessary for flask
+    # print(f"Arquivo .env encontrado em: {path}")
+    # load_dotenv(path)
+    app.config["ACCESS_TOKEN"] = get_key('.env', "ACCESS_TOKEN")
+    app.config["APP_ID"] = get_key('.env', "APP_ID")
+    app.config["APP_SECRET"] = get_key('.env', "APP_SECRET")
+    app.config["VERSION"] = get_key('.env', "VERSION")
+    app.config["PHONE_NUMBER_ID"] = get_key('.env', "PHONE_NUMBER_ID")
+    app.config["VERIFY_TOKEN"] = get_key('.env', "VERIFY_TOKEN")
 
 
 def configure_logging():

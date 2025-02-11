@@ -1,0 +1,17 @@
+# COMPANY DATA
+VENDAS = ['1199', '1194']
+TECNICO = '1195'
+FINANCEIRO = '1196'
+
+# COLORS
+RED = '\033[31m'
+GREEN = '\033[32m'
+YELLOW = '\033[33m'
+BLUE = '\033[34m'
+BASE = '\033[38;2;'
+LIGHTBLUE = ';'.join([BASE, '11', '55', '94']) + 'm'
+DARKBLUE = ';'.join([BASE, '32', '143', '168']) + 'm'
+RESET = '\033[0m'
+
+# MISCELLANEOUS
+FALSE = '41b5a29cfb'

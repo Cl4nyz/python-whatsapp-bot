@@ -1,14 +1,18 @@
 from openai import OpenAI
 import shelve
-from dotenv import load_dotenv
+from dotenv import load_dotenv, get_key
 import os
 import time
 import logging
+import io
 
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_ASSISTANT_ID = os.getenv("OPENAI_ASSISTANT_ID")
-client = OpenAI(api_key=OPENAI_API_KEY)
+#load_dotenv("example.env")
+OPENAI_API_KEY = get_key('.env', "OPENAI_API_KEY")
+OPENAI_ASSISTANT_ID = get_key('.env', "OPENAI_ASSISTANT_ID")
+client = OpenAI(
+    api_key=OPENAI_API_KEY,
+    default_headers={"OpenAI-Beta": "assistants=v2"}    
+)
 
 
 def upload_file(path):
@@ -26,7 +30,7 @@ def create_assistant(file):
         name="WhatsApp AirBnb Assistant",
         instructions="You're a helpful WhatsApp assistant that can assist guests that are staying in our Paris AirBnb. Use your knowledge base to best respond to customer queries. If you don't know the answer, say simply that you cannot help with question and advice to contact the host directly. Be friendly and funny.",
         tools=[{"type": "retrieval"}],
-        model="gpt-4-1106-preview",
+        model="gpt-3-1106-preview",
         file_ids=[file.id],
     )
     return assistant
@@ -56,11 +60,12 @@ def run_assistant(thread, name):
 
     # Wait for completion
     # https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps#:~:text=under%20failed_at.-,Polling%20for%20updates,-In%20order%20to
+    
     while run.status != "completed":
         # Be nice to the API
-        time.sleep(0.5)
+        time.sleep(3)
         run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
-
+    
     # Retrieve the Messages
     messages = client.beta.threads.messages.list(thread_id=thread.id)
     new_message = messages.data[0].content[0].text.value
@@ -95,3 +100,11 @@ def generate_response(message_body, wa_id, name):
     new_message = run_assistant(thread, name)
 
     return new_message
+
+
+def transcribe_audio(audio_bytes):
+    client = OpenAI(
+        api_key=OPENAI_API_KEY
+    )
+    response = client.audio.transcriptions.create(model="whisper-1", file=("audio.mp3", io.BytesIO(audio_bytes), "audio/mpeg"))
+    return response.text
